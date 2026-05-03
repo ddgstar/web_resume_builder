@@ -87,17 +87,28 @@ ensure_env() {
 install_project_dependencies() {
   info "Installing backend dependencies"
   if [[ -f "$ROOT_DIR/Backend/package-lock.json" ]]; then
-    npm --prefix "$ROOT_DIR/Backend" ci
+    npm_ci_with_repair "$ROOT_DIR/Backend"
   else
     npm --prefix "$ROOT_DIR/Backend" install
   fi
 
   info "Installing frontend dependencies"
   if [[ -f "$ROOT_DIR/FrontEnd/package-lock.json" ]]; then
-    npm --prefix "$ROOT_DIR/FrontEnd" ci
+    npm_ci_with_repair "$ROOT_DIR/FrontEnd"
   else
     npm --prefix "$ROOT_DIR/FrontEnd" install
   fi
+}
+
+npm_ci_with_repair() {
+  local package_dir="$1"
+  if npm --prefix "$package_dir" ci; then
+    return
+  fi
+
+  warn "npm ci failed in $package_dir. Repairing package-lock.json and retrying install."
+  npm --prefix "$package_dir" install --package-lock-only
+  npm --prefix "$package_dir" ci
 }
 
 build_project() {
