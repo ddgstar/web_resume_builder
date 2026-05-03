@@ -1,0 +1,21 @@
+{
+  "name": "autoresumebuilder-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "npm --prefix Backend install && npm --prefix FrontEnd install",
+    "db:init": "npm --prefix Backend run db:init",
+    "dev": "node scripts/dev-supervisor.mjs",
+    "dev:once": "npm --prefix Backend run dev & npm --prefix FrontEnd run dev",
+    "deploy:mac": "bash scripts/deploy-mac-cloudflare.sh",
+    "deploy:status": "bash scripts/deploy-status.sh",
+    "deploy:stop": "bash scripts/deploy-stop.sh",
+    "prod:deploy:mac": "bash scripts/deploy-production-mac.sh",
+    "prod:update": "bash scripts/update-production-from-git.sh",
+    "prod:status": "bash scripts/prod-status.sh",
+    "prod:stop": "bash scripts/prod-stop.sh",
+    "build": "npm --prefix Backend run build && npm --prefix FrontEnd run build",
+    "audit": "npm --prefix Backend audit --omit=dev && npm --prefix FrontEnd audit --omit=dev"
+  }
+}

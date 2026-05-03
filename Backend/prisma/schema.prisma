@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AppSetting {
+  id                                    String   @id @default("singleton")
+  openAIAPIKey                          String   @default("")
+  openAIModel                           String   @default("gpt-5.4")
+  reasoningEffort                       String   @default("high")
+  exportFormat                          String   @default("docx")
+  duplicateJobDescriptionDetectionEnabled Boolean @default(true)
+  maxParallelGenerations                Int      @default(3)
+  createdAt                             DateTime @default(now())
+  updatedAt                             DateTime @updatedAt
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  role         String   @default("USER")
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
+
+  sessions     UserSession[]
+  profileAssignments UserProfileAssignment[]
+}
+
+model UserSession {
+  id        String   @id @default(uuid())
+  userID    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userID], references: [id], onDelete: Cascade)
+
+  @@index([userID])
+  @@index([expiresAt])
+}
+
+model Profile {
+  id            String   @id @default(uuid())
+  name          String
+  location      String   @default("")
+  email         String   @default("")
+  phoneNumber   String   @default("")
+  linkedInURL   String   @default("")
+  basePrompt    String
+  educationText String   @default("")
+  openAIAPIKey  String   @default("")
+  openAIModel   String?
+  reasoningEffort String?
+  pageMarginTop Float    @default(0.5)
+  pageMarginRight Float  @default(0.5)
+  pageMarginBottom Float @default(0.5)
+  pageMarginLeft Float   @default(0.5)
+  nameFontSize Float     @default(14)
+  bodyFontSize Float     @default(10)
+  resumeFontFamily String @default("Calibri")
+  resumeBackgroundColor String @default("FFFFFF")
+  resumeBodyTextColor String @default("222222")
+  resumeHeadingColor String @default("111111")
+  resumeFileName String?
+  resumeStoredPath String?
+  resumeContentType String?
+  resumeExtractedText String?
+  resumeImportedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  jobs          GenerationJob[]
+  histories     ResumeHistory[]
+  userAssignments UserProfileAssignment[]
+}
+
+model UserProfileAssignment {
+  userID      String
+  profileID   String
+  createdAt   DateTime @default(now())
+
+  user        User    @relation(fields: [userID], references: [id], onDelete: Cascade)
+  profile     Profile @relation(fields: [profileID], references: [id], onDelete: Cascade)
+
+  @@id([userID, profileID])
+  @@index([profileID])
+}
+
+model GenerationJob {
+  id               String   @id @default(uuid())
+  profileID        String
+  profileName      String
+  jobDescription   String
+  progressPhase    String   @default("queued")
+  progressMessage  String   @default("Queued")
+  progressFraction Float    @default(0)
+  attempts         Int      @default(0)
+  exportFormat     String   @default("docx")
+  aiModel          String   @default("")
+  aiReasoningEffort String  @default("")
+  aiConfigSource   String   @default("")
+  errorMessage     String?
+  resultContent    String?
+  exportedFileName String?
+  savedFilePath    String?
+  notesJSON        String   @default("[]")
+  atsAnalysisJSON  String?
+  readinessJSON    String?
+  duplicateCheckJSON String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  completedAt      DateTime?
+
+  profile          Profile  @relation(fields: [profileID], references: [id], onDelete: Cascade)
+}
+
+model ResumeHistory {
+  id                 String   @id @default(uuid())
+  profileID           String
+  profileName         String
+  jobTitle            String
+  jobDescription      String
+  generatedResume     String
+  exportedFileName    String
+  savedFilePath       String?
+  exportFormat        String
+  totalDurationSeconds Float
+  apiDurationSeconds  Float?
+  atsAnalysisJSON     String?
+  createdAt           DateTime
+  completedAt         DateTime @default(now())
+
+  profile             Profile @relation(fields: [profileID], references: [id], onDelete: Cascade)
+}
+
+model JobDescriptionArchive {
+  id             String   @id @default(uuid())
+  jobID          String
+  profileID      String
+  profileName    String
+  preview        String
+  normalizedText String
+  tokenCountsJSON String
+  shinglesJSON   String
+  createdAt      DateTime @default(now())
+
+  @@index([profileID])
+  @@index([jobID])
+}
+
+model DeveloperEvent {
+  id        String   @id @default(uuid())
+  category  String
+  title     String
+  detail    String
+  jobID     String?
+  createdAt DateTime @default(now())
+}
+
+model APIDebugSession {
+  id                 String   @id @default(uuid())
+  jobID              String?
+  label              String
+  requestSummary     String
+  responseID         String?
+  responseStatusCode Int?
+  rawOutput          String?
+  error              String?
+  startedAt          DateTime @default(now())
+  completedAt        DateTime?
+
+  @@index([jobID])
+  @@index([startedAt])
+}

@@ -1,0 +1,44 @@
+AutoResumeBuilder Web - Remote MacBook Deployment
+================================================
+
+Fastest beginner production flow:
+
+1. Copy this zip file to the remote MacBook.
+2. Double-click the zip file to unzip it.
+3. Open the extracted folder.
+4. Double-click:
+
+   START-HERE-DEPLOY-MAC.command
+
+5. Wait until it builds the app and prints a public URL like:
+
+   https://something.trycloudflare.com
+
+6. Open that URL from anywhere.
+
+
+Terminal flow:
+
+cd path/to/AutoResumeBuilder-Web
+npm run prod:deploy:mac
+
+
+Useful commands:
+
+npm run prod:status
+npm run prod:update
+npm run prod:stop
+tail -f .deploy/logs/production-app.log .deploy/logs/cloudflared.log .deploy/logs/git-updater.log
+
+
+Important notes:
+
+- No router port forwarding is required.
+- The backend serves the production React app and API from one local port: 8080.
+- Keep the MacBook awake and connected to the internet.
+- The first deployment may ask for the macOS password if Homebrew or Node.js needs to be installed.
+- The script creates local .env files from examples if they do not exist.
+- Configure the OpenAI API key in the app Settings after logging in, or edit Backend/.env before deploying.
+- Default first-login admin credentials are documented in README.md unless you set custom DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD before first startup.
+- If this folder was cloned from GitHub and has an origin remote, the deployment starts a GitHub auto-updater that checks for new pushes and restarts production after updates.
+- The quick trycloudflare.com URL may change after restarts. Use a named Cloudflare Tunnel and your own domain for a permanent URL.
