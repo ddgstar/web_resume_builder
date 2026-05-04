@@ -12,6 +12,7 @@
     "deploy:status": "bash scripts/deploy-status.sh",
     "deploy:stop": "bash scripts/deploy-stop.sh",
     "prod:deploy:mac": "bash scripts/deploy-production-mac.sh",
+    "prod:setup-url": "bash scripts/setup-stable-url.sh",
     "prod:update": "bash scripts/update-production-from-git.sh",
     "prod:status": "bash scripts/prod-status.sh",
     "prod:restart": "bash scripts/prod-restart.sh",

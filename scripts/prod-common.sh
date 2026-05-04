@@ -8,10 +8,18 @@ URL_FILE="$ROOT_DIR/.deploy/public-url.txt"
 APP_LOG="$LOG_DIR/production-app.log"
 TUNNEL_LOG="$LOG_DIR/cloudflared.log"
 UPDATER_LOG="$LOG_DIR/git-updater.log"
+DEPLOY_ENV_FILE="$ROOT_DIR/.deploy/production.env"
 LAUNCHD_LABEL="com.autoresumebuilder.web"
 LAUNCHD_PLIST="$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
+
+if [[ -f "$DEPLOY_ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$DEPLOY_ENV_FILE"
+  set +a
+fi
 
 info() { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
 warn() { printf "\033[1;33mWarning:\033[0m %s\n" "$1"; }
@@ -265,4 +273,94 @@ wait_for_app_quiet() {
     sleep 1
   done
   return 1
+}
+
+stable_public_url() {
+  if [[ -n "${AUTORB_PUBLIC_URL:-}" ]]; then
+    printf "%s" "$AUTORB_PUBLIC_URL"
+    return
+  fi
+  if [[ -n "${AUTORB_PUBLIC_HOSTNAME:-}" ]]; then
+    printf "https://%s" "$AUTORB_PUBLIC_HOSTNAME"
+  fi
+}
+
+start_cloudflare_tunnel() {
+  info "Starting Cloudflare Tunnel to local production app"
+  stop_pid_file "$PID_DIR/cloudflared.pid"
+  rm -f "$URL_FILE"
+
+  if [[ -n "${AUTORB_CLOUDFLARE_TUNNEL_TOKEN:-}" ]]; then
+    info "Using configured Cloudflare tunnel token"
+    nohup cloudflared tunnel --no-autoupdate run --token "$AUTORB_CLOUDFLARE_TUNNEL_TOKEN" > "$TUNNEL_LOG" 2>&1 &
+    printf "%s" "$!" > "$PID_DIR/cloudflared.pid"
+    write_stable_url_or_warn
+    return
+  fi
+
+  if [[ -n "${AUTORB_PUBLIC_HOSTNAME:-}" ]]; then
+    start_named_cloudflare_tunnel
+    return
+  fi
+
+  start_quick_cloudflare_tunnel
+}
+
+start_named_cloudflare_tunnel() {
+  local tunnel_name="${AUTORB_TUNNEL_NAME:-autoresume-builder}"
+  info "Using stable Cloudflare hostname: $AUTORB_PUBLIC_HOSTNAME"
+
+  if [[ ! -f "$HOME/.cloudflared/cert.pem" ]]; then
+    warn "Cloudflare login is required once before creating a stable named tunnel."
+    warn "A browser window will open. Log in, choose your domain, then rerun deployment if the command does not continue."
+    cloudflared tunnel login
+  fi
+
+  if ! cloudflared tunnel info "$tunnel_name" >/dev/null 2>&1; then
+    info "Creating Cloudflare named tunnel: $tunnel_name"
+    cloudflared tunnel create "$tunnel_name"
+  fi
+
+  info "Routing $AUTORB_PUBLIC_HOSTNAME to tunnel $tunnel_name"
+  cloudflared tunnel route dns "$tunnel_name" "$AUTORB_PUBLIC_HOSTNAME" >/dev/null 2>&1 || warn "DNS route may already exist. Continuing."
+
+  nohup cloudflared tunnel --url "http://127.0.0.1:8080" --no-autoupdate run "$tunnel_name" > "$TUNNEL_LOG" 2>&1 &
+  printf "%s" "$!" > "$PID_DIR/cloudflared.pid"
+  write_stable_url_or_warn
+}
+
+start_quick_cloudflare_tunnel() {
+  warn "No stable hostname configured. Starting temporary trycloudflare.com URL."
+  warn "Run 'npm run prod:setup-url' to configure a URL that does not change."
+  nohup cloudflared tunnel --url "http://127.0.0.1:8080" --no-autoupdate > "$TUNNEL_LOG" 2>&1 &
+  printf "%s" "$!" > "$PID_DIR/cloudflared.pid"
+  wait_for_quick_tunnel_url
+}
+
+wait_for_quick_tunnel_url() {
+  local deadline=$((SECONDS + 60))
+  while (( SECONDS < deadline )); do
+    local url
+    url="$(grep -Eo 'https://[-a-zA-Z0-9]+\.trycloudflare\.com' "$TUNNEL_LOG" | tail -1 || true)"
+    if [[ -n "$url" ]]; then
+      printf "%s\n" "$url" > "$URL_FILE"
+      printf "\n\033[1;32mAutoResumeBuilder production is live:\033[0m %s\n\n" "$url"
+      return
+    fi
+    sleep 1
+  done
+  warn "Cloudflare tunnel started, but a public URL was not detected yet."
+  warn "Check the tunnel log: $TUNNEL_LOG"
+}
+
+write_stable_url_or_warn() {
+  local url
+  url="$(stable_public_url)"
+  if [[ -n "$url" ]]; then
+    printf "%s\n" "$url" > "$URL_FILE"
+    printf "\n\033[1;32mAutoResumeBuilder production is live:\033[0m %s\n\n" "$url"
+    return
+  fi
+  warn "Tunnel started, but no AUTORB_PUBLIC_HOSTNAME or AUTORB_PUBLIC_URL is configured."
+  warn "Check the tunnel log: $TUNNEL_LOG"
 }

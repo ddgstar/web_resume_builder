@@ -93,6 +93,32 @@ From the `Web` folder, run:
 npm run prod:deploy:mac
 ```
 
+### Stable URL Setup
+
+By default, Cloudflare quick tunnels create a temporary `trycloudflare.com` URL that changes after restarts. To keep the same URL every time, configure a named Cloudflare Tunnel with a hostname on a domain managed by Cloudflare:
+
+```bash
+npm run prod:setup-url
+npm run prod:deploy:mac
+```
+
+The setup command saves local deployment settings in `.deploy/production.env`, creates or reuses a named tunnel, and routes your hostname to the MacBook. After this, every deployment reuses the same URL, for example:
+
+```text
+https://resume.yourdomain.com
+```
+
+If you already created a Cloudflare tunnel in the Cloudflare dashboard, you can also use a token instead:
+
+```bash
+mkdir -p .deploy
+cat > .deploy/production.env <<'EOF'
+AUTORB_PUBLIC_URL=https://resume.yourdomain.com
+AUTORB_CLOUDFLARE_TUNNEL_TOKEN=your-cloudflare-tunnel-token
+EOF
+npm run prod:deploy:mac
+```
+
 If this was copied to a remote MacBook as a zip, the easiest option is to double-click:
 
 ```text
@@ -111,7 +137,7 @@ The script will:
 - Install a macOS `launchd` service for the production backend supervisor. The backend serves both `/api` and the React app.
 - Keep the backend alive through two layers of recovery: the Node supervisor restarts crashed backend workers, and macOS restarts the supervisor after crashes, sign-in, or reboot.
 - Start a Cloudflare Tunnel in the background.
-- Print a public `https://*.trycloudflare.com` URL.
+- Reuse your stable hostname when `.deploy/production.env` is configured, otherwise print a temporary `https://*.trycloudflare.com` URL.
 - Start a GitHub auto-updater if the folder is a Git checkout with an `origin` remote.
 
 Check deployment status:
@@ -144,7 +170,7 @@ View logs:
 tail -f .deploy/logs/production-app.log .deploy/logs/cloudflared.log .deploy/logs/git-updater.log
 ```
 
-Keep the MacBook awake and connected to the internet. The quick `trycloudflare.com` URL is excellent for testing, but it can change after tunnel restarts. For a stable production URL, use a named Cloudflare Tunnel with your own domain.
+Keep the MacBook awake and connected to the internet. The quick `trycloudflare.com` URL is excellent for testing, but it can change after tunnel restarts. For a stable production URL, run `npm run prod:setup-url` once and use your own Cloudflare-managed hostname.
 
 ### Recommended GitHub-Based Production Flow
 
