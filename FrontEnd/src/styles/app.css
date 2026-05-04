@@ -453,6 +453,13 @@ p {
   justify-content: center;
 }
 
+.icon-button.compact {
+  width: 26px;
+  height: 26px;
+  padding: 2px;
+  font-size: 18px;
+}
+
 .icon-button.copied {
   color: var(--green);
   background: color-mix(in srgb, var(--green), transparent 86%);
@@ -1036,14 +1043,65 @@ label {
   position: fixed;
   right: 24px;
   bottom: 24px;
+  display: grid;
+  gap: 8px;
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(520px, calc(100vh - 48px));
   padding: 12px 16px;
   border-radius: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .22);
   z-index: 30;
 }
 
 .toast.error {
+  color: var(--red);
+}
+
+.toast-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.toast-header strong {
+  color: var(--red);
+  line-height: 1.35;
+}
+
+.toast-details,
+.inline-error pre {
+  overflow: auto;
+  max-height: 280px;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--red), transparent 70%);
+  border-radius: 12px;
+  padding: 10px;
+  white-space: pre-wrap;
+  color: var(--text);
+  background: color-mix(in srgb, var(--red), transparent 92%);
+  font-size: 12px;
+}
+
+.text-toggle {
+  width: max-content;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inline-error {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.inline-error .text-toggle {
   color: var(--red);
 }
 

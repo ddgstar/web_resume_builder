@@ -24,6 +24,11 @@ const screens: Array<{ id: Screen; label: string; icon: ElementType; adminOnly?:
   { id: "users", label: "Users", icon: Users, adminOnly: true }
 ];
 
+interface ToastError {
+  title: string;
+  details?: string;
+}
+
 export function App() {
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -36,7 +41,8 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [dark, setDark] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ToastError | null>(null);
+  const [seenFailedJobIDs, setSeenFailedJobIDs] = useState<Set<string>>(() => new Set());
   const [serviceStatus, setServiceStatus] = useState<"checking" | "online" | "offline">("checking");
   const isAdmin = currentUser?.role === "ADMIN";
 
@@ -45,7 +51,23 @@ export function App() {
       void logout(true);
       return;
     }
-    setError(error instanceof Error ? error.message : fallback);
+    showError(error, fallback);
+  }
+
+  function showError(error: unknown, fallback = "Something went wrong.") {
+    if (error instanceof APIError) {
+      setError({ title: error.message || fallback, details: error.detailText || undefined });
+      return;
+    }
+    if (error instanceof Error) {
+      setError({ title: error.message || fallback, details: error.stack });
+      return;
+    }
+    if (typeof error === "string") {
+      setError({ title: error });
+      return;
+    }
+    setError({ title: fallback });
   }
 
   async function refresh() {
@@ -118,6 +140,21 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [error]);
 
+  useEffect(() => {
+    const newFailures = jobs.filter((job) =>
+      job.progress.phase === "failed" &&
+      job.errorMessage &&
+      !seenFailedJobIDs.has(job.id)
+    );
+    if (newFailures.length === 0) return;
+    const latest = newFailures[0];
+    setSeenFailedJobIDs((current) => new Set([...current, ...newFailures.map((job) => job.id)]));
+    setError({
+      title: `${latest.profileName} generation failed`,
+      details: latest.errorMessage ?? latest.progress.message
+    });
+  }, [jobs, seenFailedJobIDs]);
+
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileID) ?? null,
     [profiles, selectedProfileID]
@@ -140,7 +177,7 @@ export function App() {
     setSelectedProfileID,
     setSelectedJobID,
     refresh,
-    onError: setError
+    onError: showError
   };
 
   async function logout(expired = false) {
@@ -153,7 +190,7 @@ export function App() {
     setAccountOpen(false);
     setSettingsOpen(false);
     if (expired) {
-      setError("Your session expired. Please sign in again.");
+      setError({ title: "Your session expired. Please sign in again." });
     }
   }
 
@@ -219,13 +256,13 @@ export function App() {
             {serviceStatus === "offline" ? "Backend is reconnecting. The local supervisor will restart it automatically." : "Checking backend status..."}
           </div>
         )}
-        {error && <div className="toast error">{error}</div>}
+        {error && <ErrorToast error={error} onClose={() => setError(null)} />}
         {screen === "dashboard" && <DashboardPage {...context} />}
         {screen === "profiles" && isAdmin && <ProfilesPage {...context} />}
-        {screen === "history" && <HistoryPageView isAdmin={isAdmin} onError={setError} />}
+        {screen === "history" && <HistoryPageView isAdmin={isAdmin} onError={showError} />}
         {screen === "statistics" && <StatisticsPage />}
         {screen === "developer" && <DeveloperPage isAdmin={isAdmin} />}
-        {screen === "users" && isAdmin && <UserManagementPage currentUser={currentUser} profiles={profiles} onError={setError} />}
+        {screen === "users" && isAdmin && <UserManagementPage currentUser={currentUser} profiles={profiles} onError={showError} />}
       </main>
       {settingsOpen && settings && isAdmin && (
         <SettingsModal
@@ -247,6 +284,26 @@ export function App() {
               .catch((error) => handleRequestError(error, "Could not refresh account details."));
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function ErrorToast({ error, onClose }: { error: ToastError; onClose: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="toast error" role="alert">
+      <div className="toast-header">
+        <strong>{error.title}</strong>
+        <button className="icon-button compact" aria-label="Dismiss error" onClick={onClose}>×</button>
+      </div>
+      {error.details && (
+        <>
+          <button className="text-toggle" onClick={() => setExpanded((value) => !value)}>
+            {expanded ? "Hide details" : "Show details"} &gt;
+          </button>
+          {expanded && <pre className="toast-details">{error.details}</pre>}
+        </>
       )}
     </div>
   );

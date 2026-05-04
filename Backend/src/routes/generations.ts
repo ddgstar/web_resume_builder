@@ -1,9 +1,11 @@
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prisma.js";
 import { assertUserCanAccessProfile, getAccessibleProfileIDs } from "../services/permissions.js";
-import { queueGeneration, serializeJob } from "../services/generationRunner.js";
+import { ensureSettings, queueGeneration, serializeJob } from "../services/generationRunner.js";
+import { checkJobDescriptionDuplicate } from "../services/jobDescriptionArchive.js";
 import { notFound } from "../utils/errors.js";
 import { asyncHandler } from "../utils/http.js";
 
@@ -28,6 +30,38 @@ router.post("/", asyncHandler(async (req, res) => {
   await assertUserCanAccessProfile(req.user!, body.profileID);
   const job = await queueGeneration(body);
   res.status(202).json(serializeJob(job));
+}));
+
+router.post("/duplicate-check", asyncHandler(async (req, res) => {
+  const body = z.object({
+    profileID: z.string().min(1),
+    jobDescription: z.string().min(1)
+  }).parse(req.body);
+  await assertUserCanAccessProfile(req.user!, body.profileID);
+
+  const settings = await ensureSettings();
+  if (!settings.duplicateJobDescriptionDetectionEnabled) {
+    return res.json({
+      status: "disabled",
+      checkedAt: new Date().toISOString(),
+      message: "Duplicate job description detection is turned off.",
+      matches: []
+    });
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: body.profileID },
+    select: { id: true, name: true }
+  });
+  if (!profile) throw notFound("Profile not found.");
+
+  const result = await checkJobDescriptionDuplicate({
+    jobID: randomUUID(),
+    profileID: profile.id,
+    profileName: profile.name,
+    jobDescription: body.jobDescription
+  });
+  res.json(result);
 }));
 
 router.get("/:id", asyncHandler(async (req, res) => {

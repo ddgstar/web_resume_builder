@@ -15,6 +15,41 @@ export async function checkAndRecordJobDescription(input: {
   jobDescription: string;
   createdAt: Date;
 }): Promise<DuplicateCheck> {
+  const result = await evaluateJobDescription(input);
+
+  await prisma.jobDescriptionArchive.deleteMany({ where: { jobID: input.jobID } });
+  await prisma.jobDescriptionArchive.create({
+    data: {
+      jobID: input.jobID,
+      profileID: input.profileID,
+      profileName: input.profileName,
+      preview: preview(input.jobDescription),
+      normalizedText: result.candidate.normalizedText,
+      tokenCountsJSON: stringifyJSON(result.candidate.tokenCounts),
+      shinglesJSON: stringifyJSON(result.candidate.shingles),
+      createdAt: input.createdAt
+    }
+  });
+
+  return duplicateCheckFromMatches(input.profileID, input.profileName, result.matches);
+}
+
+export async function checkJobDescriptionDuplicate(input: {
+  jobID: string;
+  profileID: string;
+  profileName: string;
+  jobDescription: string;
+}): Promise<DuplicateCheck> {
+  const result = await evaluateJobDescription(input);
+  return duplicateCheckFromMatches(input.profileID, input.profileName, result.matches);
+}
+
+async function evaluateJobDescription(input: {
+  jobID: string;
+  profileID: string;
+  profileName: string;
+  jobDescription: string;
+}) {
   const candidate = fingerprint(input.jobDescription);
   const records = await prisma.jobDescriptionArchive.findMany({
     where: { NOT: { jobID: input.jobID } },
@@ -46,26 +81,16 @@ export async function checkAndRecordJobDescription(input: {
     .sort((left, right) => right.score - left.score)
     .slice(0, 8);
 
-  await prisma.jobDescriptionArchive.deleteMany({ where: { jobID: input.jobID } });
-  await prisma.jobDescriptionArchive.create({
-    data: {
-      jobID: input.jobID,
-      profileID: input.profileID,
-      profileName: input.profileName,
-      preview: preview(input.jobDescription),
-      normalizedText: candidate.normalizedText,
-      tokenCountsJSON: stringifyJSON(candidate.tokenCounts),
-      shinglesJSON: stringifyJSON(candidate.shingles),
-      createdAt: input.createdAt
-    }
-  });
+  return { candidate, matches };
+}
 
-  const sameProfile = matches.filter((match) => match.profileID === input.profileID);
+function duplicateCheckFromMatches(profileID: string, profileName: string, matches: DuplicateMatch[]): DuplicateCheck {
+  const sameProfile = matches.filter((match) => match.profileID === profileID);
   if (sameProfile.length > 0) {
     return {
       status: "duplicateSameProfile",
       checkedAt: new Date().toISOString(),
-      message: `Duplicate JD found for ${input.profileName}.`,
+      message: `Duplicate JD found for ${profileName}.`,
       matches
     };
   }
@@ -190,4 +215,3 @@ function preview(value: string) {
     .filter(Boolean)[0] ?? value.trim();
   return firstLine.slice(0, 240);
 }
-

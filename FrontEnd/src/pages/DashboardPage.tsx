@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Copy, Download, Flag, RotateCcw, Search, ShieldQuestion, Sparkles, Square, Trash2 } from "lucide-react";
 import { api } from "../api/client";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { modelQualityLabels } from "../constants/openai";
-import type { AppSettings, GenerationJob, Profile } from "../types/domain";
+import type { AppSettings, DuplicateCheck, GenerationJob, Profile } from "../types/domain";
 import { copyText } from "../utils/clipboard";
 
 interface Props {
@@ -16,12 +17,13 @@ interface Props {
   setJobs: (jobs: GenerationJob[]) => void;
   setSelectedProfileID: (id: string) => void;
   setSelectedJobID: (id: string) => void;
-  onError: (message: string) => void;
+  onError: (message: unknown) => void;
 }
 
 export function DashboardPage(props: Props) {
   const [jobDescription, setJobDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingDuplicate, setPendingDuplicate] = useState<{ jobDescription: string; check: DuplicateCheck } | null>(null);
   const estimatedInputTokens = estimateTokens(`${props.selectedProfile?.basePrompt ?? ""}\n${jobDescription}`);
   const selectedModel = props.selectedProfile?.openAIModel || props.settings?.openAIModel || "App default";
   const selectedReasoning = props.selectedProfile?.reasoningEffort || props.settings?.reasoningEffort || "default";
@@ -31,12 +33,36 @@ export function DashboardPage(props: Props) {
     if (!props.selectedProfileID || !jobDescription.trim()) return;
     setBusy(true);
     try {
-      const job = await api.queueGeneration(props.selectedProfileID, jobDescription, props.settings?.exportFormat ?? "docx");
-      props.setJobs([job, ...props.jobs]);
-      props.setSelectedJobID(job.id);
-      setJobDescription("");
+      const trimmedDescription = jobDescription.trim();
+      const duplicateCheck = await api.checkDuplicateJobDescription(props.selectedProfileID, trimmedDescription);
+      if (isDuplicate(duplicateCheck)) {
+        setPendingDuplicate({ jobDescription: trimmedDescription, check: duplicateCheck });
+        return;
+      }
+      await queueConfirmedGeneration(trimmedDescription);
     } catch (error) {
-      props.onError(error instanceof Error ? error.message : "Could not queue generation.");
+      props.onError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function queueConfirmedGeneration(description: string) {
+    const job = await api.queueGeneration(props.selectedProfileID, description, props.settings?.exportFormat ?? "docx");
+    props.setJobs([job, ...props.jobs]);
+    props.setSelectedJobID(job.id);
+    setJobDescription("");
+  }
+
+  async function confirmDuplicateGeneration() {
+    const duplicate = pendingDuplicate;
+    if (!duplicate) return;
+    setPendingDuplicate(null);
+    setBusy(true);
+    try {
+      await queueConfirmedGeneration(duplicate.jobDescription);
+    } catch (error) {
+      props.onError(error);
     } finally {
       setBusy(false);
     }
@@ -109,6 +135,17 @@ export function DashboardPage(props: Props) {
         setSelectedJobID={props.setSelectedJobID}
         onError={props.onError}
       />
+      {pendingDuplicate && (
+        <ConfirmDialog
+          title="Duplicate job description found"
+          message={duplicateConfirmationMessage(pendingDuplicate.check)}
+          confirmLabel="Yes, Generate"
+          cancelLabel="No, Cancel"
+          tone="danger"
+          onCancel={() => setPendingDuplicate(null)}
+          onConfirm={() => void confirmDuplicateGeneration()}
+        />
+      )}
     </section>
   );
 }
@@ -118,7 +155,7 @@ function GenerationQueue({ jobs, selectedJobID, setJobs, setSelectedJobID, onErr
   selectedJobID: string;
   setJobs: (jobs: GenerationJob[]) => void;
   setSelectedJobID: (id: string) => void;
-  onError: (message: string) => void;
+  onError: (message: unknown) => void;
 }) {
   const activePhases = new Set(["queued", "preparing", "callingModel", "mergingResume"]);
   const [copiedJobID, setCopiedJobID] = useState<string | null>(null);
@@ -129,7 +166,7 @@ function GenerationQueue({ jobs, selectedJobID, setJobs, setSelectedJobID, onErr
       await api.deleteJob(id);
       setJobs(jobs.filter((job) => job.id !== id));
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not delete generation job.");
+      onError(error);
     }
   }
 
@@ -138,7 +175,7 @@ function GenerationQueue({ jobs, selectedJobID, setJobs, setSelectedJobID, onErr
       const updated = await api.cancelJob(id);
       setJobs(jobs.map((job) => job.id === id ? updated : job));
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not cancel generation job.");
+      onError(error);
     }
   }
 
@@ -148,7 +185,7 @@ function GenerationQueue({ jobs, selectedJobID, setJobs, setSelectedJobID, onErr
       setJobs([next, ...jobs]);
       setSelectedJobID(next.id);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not retry generation job.");
+      onError(error);
     }
   }
 
@@ -158,7 +195,7 @@ function GenerationQueue({ jobs, selectedJobID, setJobs, setSelectedJobID, onErr
       setCopiedJobID(job.id);
       window.setTimeout(() => setCopiedJobID((current) => current === job.id ? null : current), 1800);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not copy generated resume.");
+      onError(error);
     }
   }
 
@@ -213,6 +250,7 @@ function GenerationQueue({ jobs, selectedJobID, setJobs, setSelectedJobID, onErr
                   <span className="muted">{new Date(job.createdAt).toLocaleTimeString()}</span>
                 </div>
                 <p>{job.progress.message}</p>
+                {job.progress.phase === "failed" && job.errorMessage && <FailedJobDetails message={job.errorMessage} />}
                 <div className={isActive ? "queue-progress active" : "queue-progress"}>
                   <span style={{ width: `${Math.max(5, Math.round(job.progress.fractionCompleted * 100))}%` }} />
                 </div>
@@ -232,6 +270,31 @@ function GenerationQueue({ jobs, selectedJobID, setJobs, setSelectedJobID, onErr
       )}
     </div>
   );
+}
+
+function FailedJobDetails({ message }: { message: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="inline-error">
+      <button className="text-toggle" onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}>
+        {open ? "Hide failure reason" : "Show failure reason"} &gt;
+      </button>
+      {open && <pre>{message}</pre>}
+    </div>
+  );
+}
+
+function isDuplicate(check: DuplicateCheck) {
+  return check.status === "duplicateSameProfile" || check.status === "duplicateOtherProfile";
+}
+
+function duplicateConfirmationMessage(check: DuplicateCheck) {
+  const topMatch = check.matches[0];
+  const profileText = topMatch ? ` Closest match: ${topMatch.profileName}, ${Math.round(topMatch.score * 100)}% similar.` : "";
+  const duplicateType = check.status === "duplicateSameProfile"
+    ? "This job description looks duplicated for the same profile."
+    : "This job description looks similar to one already generated for another profile.";
+  return `${duplicateType}${profileText} Are you sure you want to generate a resume? This can create extra OpenAI cost for the admin.`;
 }
 
 function DuplicateBadge({ job }: { job: GenerationJob }) {

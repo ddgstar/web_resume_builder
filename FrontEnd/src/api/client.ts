@@ -1,4 +1,4 @@
-import type { APIDebugSession, AppSettings, DeveloperEvent, GenerationJob, HistoryPage, Profile, StatisticsSummary, User, UserRole } from "../types/domain";
+import type { APIDebugSession, AppSettings, DeveloperEvent, DuplicateCheck, GenerationJob, HistoryPage, Profile, StatisticsSummary, User, UserRole } from "../types/domain";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const requestTimeoutMS = 45_000;
@@ -7,9 +7,20 @@ export class APIError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    public readonly code?: string
+    public readonly code?: string,
+    public readonly details?: unknown
   ) {
     super(message);
+  }
+
+  get detailText() {
+    if (!this.details) return "";
+    if (typeof this.details === "string") return this.details;
+    try {
+      return JSON.stringify(this.details, null, 2);
+    } catch {
+      return String(this.details);
+    }
   }
 }
 
@@ -31,7 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({ message: response.statusText, error: "REQUEST_FAILED" }));
-        throw new APIError(payload.message ?? "Request failed", response.status, payload.error);
+        throw new APIError(payload.message ?? "Request failed", response.status, payload.error, payload.details ?? payload);
       }
       if (response.status === 204) return undefined as T;
       return response.json() as Promise<T>;
@@ -69,6 +80,8 @@ export const api = {
   jobs: () => request<GenerationJob[]>("/generations"),
   queueGeneration: (profileID: string, jobDescription: string, exportFormat: string) =>
     request<GenerationJob>("/generations", { method: "POST", body: JSON.stringify({ profileID, jobDescription, exportFormat }) }),
+  checkDuplicateJobDescription: (profileID: string, jobDescription: string) =>
+    request<DuplicateCheck>("/generations/duplicate-check", { method: "POST", body: JSON.stringify({ profileID, jobDescription }) }),
   job: (id: string) => request<GenerationJob>(`/generations/${id}`),
   deleteJob: (id: string) => request<void>(`/generations/${id}`, { method: "DELETE" }),
   cancelJob: (id: string) => request<GenerationJob>(`/generations/${id}/cancel`, { method: "POST" }),
