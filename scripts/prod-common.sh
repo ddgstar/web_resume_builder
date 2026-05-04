@@ -8,6 +8,8 @@ URL_FILE="$ROOT_DIR/.deploy/public-url.txt"
 APP_LOG="$LOG_DIR/production-app.log"
 TUNNEL_LOG="$LOG_DIR/cloudflared.log"
 UPDATER_LOG="$LOG_DIR/git-updater.log"
+LAUNCHD_LABEL="com.autoresumebuilder.web"
+LAUNCHD_PLIST="$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
@@ -29,6 +31,15 @@ stop_pid_file() {
     fi
   fi
   rm -f "$file"
+}
+
+xml_escape() {
+  local value="$1"
+  value="${value//&/&amp;}"
+  value="${value//</&lt;}"
+  value="${value//>/&gt;}"
+  value="${value//\"/&quot;}"
+  printf "%s" "$value"
 }
 
 install_homebrew_if_needed() {
@@ -121,9 +132,100 @@ build_project() {
 
 start_production_app() {
   info "Starting production app supervisor"
+  if [[ "$(uname -s)" == "Darwin" && "${AUTORB_DISABLE_LAUNCHD:-0}" != "1" ]]; then
+    install_launchd_app_service
+    return
+  fi
+
+  start_production_app_nohup
+}
+
+start_production_app_nohup() {
+  stop_launchd_app_service >/dev/null 2>&1 || true
   stop_pid_file "$PID_DIR/app.pid"
   nohup node "$ROOT_DIR/scripts/prod-supervisor.mjs" > "$APP_LOG" 2>&1 &
   printf "%s" "$!" > "$PID_DIR/app.pid"
+}
+
+install_launchd_app_service() {
+  require_command node || fail "Node.js is required before installing the launchd service."
+  mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"
+
+  local node_path path_value frontend_dist
+  node_path="$(command -v node)"
+  path_value="${PATH:-/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
+  frontend_dist="$ROOT_DIR/FrontEnd/dist"
+
+  cat > "$LAUNCHD_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$(xml_escape "$LAUNCHD_LABEL")</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$node_path")</string>
+    <string>$(xml_escape "$ROOT_DIR/scripts/prod-supervisor.mjs")</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$(xml_escape "$ROOT_DIR")</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <key>PORT</key>
+    <string>8080</string>
+    <key>FRONTEND_DIST_DIR</key>
+    <string>$(xml_escape "$frontend_dist")</string>
+    <key>PATH</key>
+    <string>$(xml_escape "$path_value")</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$APP_LOG")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$APP_LOG")</string>
+</dict>
+</plist>
+EOF
+
+  stop_pid_file "$PID_DIR/app.pid"
+  stop_launchd_app_service >/dev/null 2>&1 || true
+  if launchctl bootstrap "gui/$(id -u)" "$LAUNCHD_PLIST" >/dev/null 2>&1; then
+    launchctl enable "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1 || true
+    launchctl kickstart -k "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1 || true
+  else
+    launchctl load -w "$LAUNCHD_PLIST" >/dev/null 2>&1 || fail "Could not load launchd service at $LAUNCHD_PLIST"
+  fi
+  info "Installed launchd service $LAUNCHD_LABEL"
+}
+
+stop_launchd_app_service() {
+  if [[ ! -f "$LAUNCHD_PLIST" ]]; then return 0; fi
+  launchctl bootout "gui/$(id -u)" "$LAUNCHD_PLIST" >/dev/null 2>&1 || launchctl unload "$LAUNCHD_PLIST" >/dev/null 2>&1 || true
+}
+
+remove_launchd_app_service() {
+  stop_launchd_app_service
+  rm -f "$LAUNCHD_PLIST"
+}
+
+launchd_app_status() {
+  if [[ ! -f "$LAUNCHD_PLIST" ]]; then
+    printf "%-24s not installed\n" "Launchd service"
+    return
+  fi
+  if launchctl print "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1; then
+    printf "%-24s loaded (%s)\n" "Launchd service" "$LAUNCHD_LABEL"
+  else
+    printf "%-24s installed but not loaded\n" "Launchd service"
+  fi
 }
 
 wait_for_app() {

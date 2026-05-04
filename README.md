@@ -108,7 +108,8 @@ The script will:
 - Install frontend/backend npm dependencies from lockfiles.
 - Initialize the SQLite database.
 - Build the backend and frontend.
-- Start one production backend supervisor in the background. The backend serves both `/api` and the React app.
+- Install a macOS `launchd` service for the production backend supervisor. The backend serves both `/api` and the React app.
+- Keep the backend alive through two layers of recovery: the Node supervisor restarts crashed backend workers, and macOS restarts the supervisor after crashes, sign-in, or reboot.
 - Start a Cloudflare Tunnel in the background.
 - Print a public `https://*.trycloudflare.com` URL.
 - Start a GitHub auto-updater if the folder is a Git checkout with an `origin` remote.
@@ -123,6 +124,12 @@ Manually pull the latest GitHub push and restart production:
 
 ```bash
 npm run prod:update
+```
+
+Restart only the production app service:
+
+```bash
+npm run prod:restart
 ```
 
 Stop the deployment:

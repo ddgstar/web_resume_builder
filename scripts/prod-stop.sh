@@ -3,6 +3,7 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/prod-common.sh"
 
+remove_launchd_app_service
 stop_pid_file "$PID_DIR/app.pid"
 stop_pid_file "$PID_DIR/cloudflared.pid"
 stop_pid_file "$PID_DIR/git-updater.pid"

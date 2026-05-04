@@ -120,6 +120,12 @@ export function DashboardPage(props: Props) {
               <p className={props.selectedJob.progress.phase === "failed" ? "danger" : "muted"}>{props.selectedJob.progress.message}</p>
               <AIConfigSummary job={props.selectedJob} />
               <progress max={1} value={props.selectedJob.progress.fractionCompleted} />
+              {props.selectedJob.progress.phase === "failed" && props.selectedJob.errorMessage && (
+                <div className="failure-card">
+                  <strong>Generation failed</strong>
+                  <FailedJobDetails message={props.selectedJob.errorMessage} />
+                </div>
+              )}
               {props.selectedJob.result?.atsAnalysis && <span className="pill">{props.selectedJob.result.atsAnalysis.matchScore}% ATS match</span>}
               <pre>{props.selectedJob.result?.content ?? "Resume output will appear here when generation completes."}</pre>
             </div>

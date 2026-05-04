@@ -20,6 +20,7 @@ status_pid() {
 }
 
 status_pid "Production app" "$PID_DIR/app.pid"
+launchd_app_status
 status_pid "Cloudflare tunnel" "$PID_DIR/cloudflared.pid"
 status_pid "GitHub updater" "$PID_DIR/git-updater.pid"
 

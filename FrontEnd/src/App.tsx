@@ -136,7 +136,7 @@ export function App() {
 
   useEffect(() => {
     if (!error) return undefined;
-    const timeout = window.setTimeout(() => setError(null), 6000);
+    const timeout = window.setTimeout(() => setError(null), error.details ? 18_000 : 8_000);
     return () => window.clearTimeout(timeout);
   }, [error]);
 
@@ -252,9 +252,7 @@ export function App() {
       </aside>
       <main className="main-panel">
         {serviceStatus !== "online" && (
-          <div className={serviceStatus === "offline" ? "service-banner offline" : "service-banner"}>
-            {serviceStatus === "offline" ? "Backend is reconnecting. The local supervisor will restart it automatically." : "Checking backend status..."}
-          </div>
+          <ServiceBanner status={serviceStatus} />
         )}
         {error && <ErrorToast error={error} onClose={() => setError(null)} />}
         {screen === "dashboard" && <DashboardPage {...context} />}
@@ -285,6 +283,22 @@ export function App() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function ServiceBanner({ status }: { status: "checking" | "offline" }) {
+  return (
+    <div className={status === "offline" ? "service-banner offline" : "service-banner"} role="status">
+      <div>
+        <strong>{status === "offline" ? "Backend connection interrupted" : "Checking backend status"}</strong>
+        <span>
+          {status === "offline"
+            ? "The production supervisor will restart the backend automatically. You can keep this page open while it reconnects."
+            : "Verifying API and database readiness before continuing."}
+        </span>
+      </div>
+      <span className="pill">{status === "offline" ? "Auto-recovery active" : "Health check"}</span>
     </div>
   );
 }
