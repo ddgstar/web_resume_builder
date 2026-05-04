@@ -134,6 +134,13 @@ start_production_app() {
   info "Starting production app supervisor"
   if [[ "$(uname -s)" == "Darwin" && "${AUTORB_DISABLE_LAUNCHD:-0}" != "1" ]]; then
     install_launchd_app_service
+    if wait_for_app_quiet 45; then
+      return
+    fi
+
+    warn "launchd service did not become ready. Falling back to direct background supervisor for this deployment."
+    print_launchd_diagnostics
+    start_production_app_nohup
     return
   fi
 
@@ -145,6 +152,7 @@ start_production_app_nohup() {
   stop_pid_file "$PID_DIR/app.pid"
   nohup node "$ROOT_DIR/scripts/prod-supervisor.mjs" > "$APP_LOG" 2>&1 &
   printf "%s" "$!" > "$PID_DIR/app.pid"
+  info "Started direct supervisor pid=$(cat "$PID_DIR/app.pid")"
 }
 
 install_launchd_app_service() {
@@ -206,6 +214,15 @@ EOF
   info "Installed launchd service $LAUNCHD_LABEL"
 }
 
+print_launchd_diagnostics() {
+  warn "Recent production app log:"
+  tail -n 80 "$APP_LOG" 2>/dev/null || true
+  if [[ -f "$LAUNCHD_PLIST" ]]; then
+    warn "launchd service state:"
+    launchctl print "gui/$(id -u)/$LAUNCHD_LABEL" 2>/dev/null | tail -n 80 || true
+  fi
+}
+
 stop_launchd_app_service() {
   if [[ ! -f "$LAUNCHD_PLIST" ]]; then return 0; fi
   launchctl bootout "gui/$(id -u)" "$LAUNCHD_PLIST" >/dev/null 2>&1 || launchctl unload "$LAUNCHD_PLIST" >/dev/null 2>&1 || true
@@ -230,12 +247,22 @@ launchd_app_status() {
 
 wait_for_app() {
   info "Waiting for local production app"
-  local deadline=$((SECONDS + 60))
+  if wait_for_app_quiet 90; then
+    return
+  fi
+
+  print_launchd_diagnostics
+  fail "Production app did not become ready. Check $APP_LOG"
+}
+
+wait_for_app_quiet() {
+  local timeout_seconds="${1:-60}"
+  local deadline=$((SECONDS + timeout_seconds))
   while (( SECONDS < deadline )); do
     if curl -fsS "http://127.0.0.1:8080/api/health" >/dev/null 2>&1 && curl -fsS "http://127.0.0.1:8080" >/dev/null 2>&1; then
-      return
+      return 0
     fi
     sleep 1
   done
-  fail "Production app did not become ready. Check $APP_LOG"
+  return 1
 }
