@@ -9,6 +9,7 @@ APP_LOG="$LOG_DIR/production-app.log"
 TUNNEL_LOG="$LOG_DIR/cloudflared.log"
 UPDATER_LOG="$LOG_DIR/git-updater.log"
 DEPLOY_ENV_FILE="$ROOT_DIR/.deploy/production.env"
+CLOUDFLARED_CONFIG_FILE="$ROOT_DIR/.deploy/cloudflared-config.yml"
 LAUNCHD_LABEL="com.autoresumebuilder.web"
 LAUNCHD_PLIST="$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
 
@@ -324,9 +325,22 @@ start_named_cloudflare_tunnel() {
   info "Routing $AUTORB_PUBLIC_HOSTNAME to tunnel $tunnel_name"
   cloudflared tunnel route dns "$tunnel_name" "$AUTORB_PUBLIC_HOSTNAME" >/dev/null 2>&1 || warn "DNS route may already exist. Continuing."
 
-  nohup cloudflared tunnel --url "http://127.0.0.1:8080" --no-autoupdate run "$tunnel_name" > "$TUNNEL_LOG" 2>&1 &
+  write_cloudflared_config "$tunnel_name" "$AUTORB_PUBLIC_HOSTNAME"
+  nohup cloudflared tunnel --config "$CLOUDFLARED_CONFIG_FILE" --no-autoupdate run "$tunnel_name" > "$TUNNEL_LOG" 2>&1 &
   printf "%s" "$!" > "$PID_DIR/cloudflared.pid"
   write_stable_url_or_warn
+}
+
+write_cloudflared_config() {
+  local tunnel_name="$1"
+  local hostname="$2"
+  cat > "$CLOUDFLARED_CONFIG_FILE" <<EOF
+tunnel: $tunnel_name
+ingress:
+  - hostname: $hostname
+    service: http://127.0.0.1:8080
+  - service: http_status:404
+EOF
 }
 
 start_quick_cloudflare_tunnel() {

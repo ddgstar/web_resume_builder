@@ -95,20 +95,28 @@ npm run prod:deploy:mac
 
 ### Stable URL Setup
 
-By default, Cloudflare quick tunnels create a temporary `trycloudflare.com` URL that changes after restarts. To keep the same URL every time, configure a named Cloudflare Tunnel with a hostname on a domain managed by Cloudflare:
+By default, Cloudflare quick tunnels create a temporary `trycloudflare.com` URL that changes after restarts. To keep the same URL every time, configure a stable Cloudflare Tunnel hostname on a domain managed by Cloudflare:
 
 ```bash
 npm run prod:setup-url
 npm run prod:deploy:mac
 ```
 
-The setup command saves local deployment settings in `.deploy/production.env`, creates or reuses a named tunnel, and routes your hostname to the MacBook. After this, every deployment reuses the same URL, for example:
+Recommended domain choice:
+
+- Use a domain you control and can put on Cloudflare nameservers.
+- Use a subdomain like `resume.yourdomain.com`, `app.yourdomain.com`, or `builder.yourdomain.com`.
+- Avoid using the root domain unless this app is the only website for that domain.
+
+The easiest production setup is the Cloudflare Dashboard token path. In Cloudflare, create a tunnel, add a public hostname such as `resume.yourdomain.com`, point it to `http://localhost:8080`, then paste the tunnel token into `npm run prod:setup-url`.
+
+The setup command saves local deployment settings in `.deploy/production.env`. After this, every deployment reuses the same URL, for example:
 
 ```text
 https://resume.yourdomain.com
 ```
 
-If you already created a Cloudflare tunnel in the Cloudflare dashboard, you can also use a token instead:
+If you already created a Cloudflare tunnel in the Cloudflare dashboard, you can also write the token manually:
 
 ```bash
 mkdir -p .deploy

@@ -30,6 +30,15 @@ else
   printf "Public URL: not available yet\n"
 fi
 
+if [[ -n "${AUTORB_CLOUDFLARE_TUNNEL_TOKEN:-}" ]]; then
+  printf "Tunnel mode: Cloudflare dashboard token\n"
+elif [[ -n "${AUTORB_PUBLIC_HOSTNAME:-}" ]]; then
+  printf "Tunnel mode: named tunnel (%s)\n" "${AUTORB_TUNNEL_NAME:-autoresume-builder}"
+else
+  printf "Tunnel mode: temporary quick tunnel\n"
+  printf "Stable URL: run npm run prod:setup-url\n"
+fi
+
 if curl -fsS "http://127.0.0.1:8080/api/health" >/dev/null 2>&1; then
   printf "Local API:  healthy\n"
 else
