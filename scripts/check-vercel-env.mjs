@@ -1,4 +1,4 @@
-const required = ["DATABASE_URL"];
+const required = ["DATABASE_URL", "DEFAULT_ADMIN_EMAIL", "DEFAULT_ADMIN_PASSWORD"];
 
 const missing = required.filter((name) => !process.env[name]?.trim());
 
@@ -9,7 +9,8 @@ if (missing.length > 0) {
   }
   console.error("");
   console.error("Add them in Vercel Project Settings -> Environment Variables, then redeploy.");
-  console.error("DATABASE_URL must be a hosted PostgreSQL connection string, for example Neon, Supabase Postgres, or Vercel Postgres.");
+console.error("DATABASE_URL must be a hosted PostgreSQL connection string, for example Neon, Supabase Postgres, or Vercel Postgres.");
+  console.error("DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD are used to create the first admin account on a fresh database.");
   process.exit(1);
 }
 
