@@ -142,7 +142,19 @@ Deploy from Vercel. The build runs:
 npm run vercel:build
 ```
 
-That command pushes the Prisma schema to Postgres, builds the backend, and builds the frontend.
+That command builds the backend and frontend only. It intentionally does not mutate the production database during the Vercel build phase.
+
+After the required environment variables are set, initialize the production database schema once from your local checkout:
+
+```bash
+npm run vercel:db:init
+```
+
+Then deploy:
+
+```bash
+npm run vercel:deploy -- --yes
+```
 
 ### 5. Important Vercel Free-Tier Notes
 

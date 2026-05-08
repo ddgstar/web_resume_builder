@@ -22,7 +22,8 @@
     "prod:restart": "bash scripts/prod-restart.sh",
     "prod:stop": "bash scripts/prod-stop.sh",
     "prod:install-service": "bash scripts/install-launchd-service.sh",
-    "vercel:build": "node scripts/check-vercel-env.mjs && npm --prefix Backend run db:init && npm --prefix Backend run build && npm --prefix FrontEnd run build",
+    "vercel:build": "npm --prefix Backend run build && npm --prefix FrontEnd run build",
+    "vercel:db:init": "node scripts/check-vercel-env.mjs && npm --prefix Backend run db:init",
     "vercel:deploy": "npx vercel deploy --prod",
     "build": "npm --prefix Backend run build && npm --prefix FrontEnd run build",
     "audit": "npm --prefix Backend audit --omit=dev && npm --prefix FrontEnd audit --omit=dev"

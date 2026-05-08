@@ -7,7 +7,7 @@ import { pinoHttp } from "pino-http";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
 import routes from "./routes/index.js";
-import { errorHandler } from "./utils/errors.js";
+import { AppError, errorHandler } from "./utils/errors.js";
 import { ensureSettings, recoverInterruptedJobs } from "./services/generationRunner.js";
 import { bootstrapInitialAdmin, pruneExpiredSessions } from "./services/auth.js";
 
@@ -74,11 +74,30 @@ export async function initializeApp() {
 }
 
 async function bootstrap() {
+  validateRuntimeConfiguration();
   await bootstrapInitialAdmin();
   await pruneExpiredSessions();
   await ensureSettings();
   if (!env.VERCEL) {
     await recoverInterruptedJobs();
+  }
+}
+
+function validateRuntimeConfiguration() {
+  if (!env.DATABASE_URL) {
+    throw new AppError(
+      503,
+      "Server is missing DATABASE_URL. Add a hosted PostgreSQL connection string in the deployment environment, then redeploy.",
+      "SERVER_CONFIGURATION_ERROR"
+    );
+  }
+
+  if (env.NODE_ENV === "production" && (!process.env.DEFAULT_ADMIN_EMAIL || !process.env.DEFAULT_ADMIN_PASSWORD)) {
+    throw new AppError(
+      503,
+      "Production startup requires DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD for the first admin account.",
+      "SERVER_CONFIGURATION_ERROR"
+    );
   }
 }
 
