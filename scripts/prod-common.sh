@@ -104,6 +104,24 @@ ensure_env() {
   fi
 }
 
+validate_database_url() {
+  local env_file="$ROOT_DIR/Backend/.env"
+  local database_url
+  database_url="$(grep -E '^DATABASE_URL=' "$env_file" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
+
+  if [[ -z "$database_url" ]]; then
+    fail "DATABASE_URL is missing in Backend/.env. Add a PostgreSQL connection string before deploying."
+  fi
+
+  if [[ "$database_url" == *"USER:PASSWORD@HOST"* || "$database_url" == *"/DATABASE"* ]]; then
+    fail "Backend/.env still contains the placeholder DATABASE_URL. Replace it with a real PostgreSQL connection string, then run the deploy again."
+  fi
+
+  if [[ "$database_url" != postgresql://* && "$database_url" != postgres://* ]]; then
+    fail "DATABASE_URL must be a PostgreSQL connection string for production deployment."
+  fi
+}
+
 install_project_dependencies() {
   info "Installing backend dependencies"
   if [[ -f "$ROOT_DIR/Backend/package-lock.json" ]]; then
@@ -132,6 +150,7 @@ npm_ci_with_repair() {
 }
 
 build_project() {
+  validate_database_url
   info "Initializing database"
   npm --prefix "$ROOT_DIR/Backend" run db:init
   info "Building backend and frontend"

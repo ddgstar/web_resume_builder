@@ -34,7 +34,7 @@ This Vercel-ready build expects PostgreSQL. For the easiest setup, create a free
 Install everything once:
 
 ```bash
-cd Web
+cd AutoResumeBuilder-Web
 npm run install:all
 npm run db:init
 ```
@@ -42,14 +42,14 @@ npm run db:init
 Run both frontend and backend with automatic restart if either process exits:
 
 ```bash
-cd Web
+cd AutoResumeBuilder-Web
 npm run dev
 ```
 
 Backend only:
 
 ```bash
-cd Web/Backend
+cd AutoResumeBuilder-Web/Backend
 cp .env.example .env
 npm install
 npm run db:init
@@ -59,7 +59,7 @@ npm run dev
 Frontend only:
 
 ```bash
-cd Web/FrontEnd
+cd AutoResumeBuilder-Web/FrontEnd
 cp .env.example .env
 npm install
 npm run dev
@@ -78,7 +78,7 @@ Change this password after signing in, or set `DEFAULT_ADMIN_EMAIL` and `DEFAULT
 
 ## Reliable Local Uptime
 
-Use `npm run dev` from the `Web` directory instead of running two terminals manually. The supervisor starts both services, restarts either service if it exits, and runs lightweight health checks against:
+Use `npm run dev` from the repository root instead of running two terminals manually. The supervisor starts both services, restarts either service if it exits, and runs lightweight health checks against:
 
 - Backend: `http://localhost:8080/api/health`
 - Frontend: `http://localhost:5173`
@@ -156,7 +156,7 @@ That command pushes the Prisma schema to Postgres, builds the backend, and build
 
 Use this when the app must run on a MacBook behind a router and you cannot configure port forwarding. The production script builds the React app, serves it from the Express backend, and exposes the single local app through Cloudflare Tunnel. This is simpler and more reliable than keeping separate frontend/backend dev servers running in production.
 
-From the `Web` folder, run:
+From the repository root, run:
 
 ```bash
 npm run prod:deploy:mac
@@ -209,7 +209,7 @@ The script will:
 - Create local `.env` files from examples when needed.
 - Force production-safe defaults for local serving: `NODE_ENV=production`, built frontend served from the backend, and frontend API calls through `/api`.
 - Install frontend/backend npm dependencies from lockfiles.
-- Initialize the SQLite database.
+- Initialize the configured PostgreSQL database.
 - Build the backend and frontend.
 - Install a macOS `launchd` service for the production backend supervisor. The backend serves both `/api` and the React app.
 - Keep the backend alive through two layers of recovery: the Node supervisor restarts crashed backend workers, and macOS restarts the supervisor after crashes, sign-in, or reboot.
@@ -255,7 +255,7 @@ On the production MacBook:
 
 ```bash
 git clone <your-github-repo-url> AutoResumeBuilder-Web
-cd AutoResumeBuilder-Web/Web
+cd AutoResumeBuilder-Web
 npm run prod:deploy:mac
 ```
 
@@ -301,7 +301,7 @@ In this mode, the stable domain points to the MacBook through Cloudflare, with n
 
 ## VPS Deployment
 
-The recommended production path is Docker Compose behind a reverse proxy such as Nginx or Caddy. Docker keeps the backend and frontend isolated, restarts services automatically, and gives you a simple upgrade path.
+The recommended VPS path is Docker Compose behind a reverse proxy such as Nginx or Caddy. Docker keeps Postgres, backend, and frontend isolated, restarts services automatically, and gives you a simple upgrade path.
 
 ### 1. Prepare The Server
 
@@ -338,7 +338,7 @@ Minimum production values:
 NODE_ENV=production
 PORT=8080
 WEB_ORIGIN=https://your-domain.com
-DATABASE_URL=file:/app/data/prod.db
+DATABASE_URL=postgresql://autoresume:autoresume_dev_password@db:5432/autoresume?sslmode=disable
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5.4
 OPENAI_REASONING_EFFORT=high
@@ -410,10 +410,10 @@ docker compose up -d --build
 docker compose logs -f backend
 ```
 
-Before major upgrades, back up the SQLite database and generated exports:
+Before major upgrades, back up Postgres and generated exports:
 
 ```bash
-tar -czf autoresumebuilder-backup-$(date +%Y%m%d).tar.gz Backend/data
+docker compose exec db pg_dump -U autoresume autoresume > autoresumebuilder-backup-$(date +%Y%m%d).sql
 ```
 
 ### Non-Docker Alternative
@@ -421,7 +421,7 @@ tar -czf autoresumebuilder-backup-$(date +%Y%m%d).tar.gz Backend/data
 Use PM2 for the backend and Nginx for the built frontend:
 
 ```bash
-cd Web/Backend
+cd AutoResumeBuilder-Web/Backend
 npm ci
 npm run db:init
 npm run build
@@ -432,7 +432,7 @@ npm ci
 npm run build
 ```
 
-Serve `Web/FrontEnd/dist` with Nginx and proxy `/api` to the backend port.
+Serve `AutoResumeBuilder-Web/FrontEnd/dist` with Nginx and proxy `/api` to the backend port.
 
 Docker Compose is still preferred for this project because it keeps local and VPS behavior closer together.
 
