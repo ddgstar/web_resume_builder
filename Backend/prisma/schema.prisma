@@ -1,9 +1,10 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -111,6 +112,7 @@ model GenerationJob {
   resultContent    String?
   exportedFileName String?
   savedFilePath    String?
+  generatedDocxBase64 String?
   notesJSON        String   @default("[]")
   atsAnalysisJSON  String?
   readinessJSON    String?
@@ -131,6 +133,7 @@ model ResumeHistory {
   generatedResume     String
   exportedFileName    String
   savedFilePath       String?
+  generatedDocxBase64 String?
   exportFormat        String
   totalDurationSeconds Float
   apiDurationSeconds  Float?

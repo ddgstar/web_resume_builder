@@ -65,6 +65,12 @@ router.get("/:id/download", asyncHandler(async (req, res) => {
       throw notFound("Generated file not found.");
     }
   }
+  if (entry?.generatedDocxBase64) {
+    const buffer = Buffer.from(entry.generatedDocxBase64, "base64");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${entry.exportedFileName}"`);
+    return res.send(buffer);
+  }
   if (!entry?.savedFilePath || !fs.existsSync(entry.savedFilePath)) {
     throw notFound("Generated file not found.");
   }

@@ -18,7 +18,11 @@ const envSchema = z.object({
   DEFAULT_ADMIN_PASSWORD: z.string().min(10).default("ChangeMe123!"),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
   SESSION_COOKIE_DOMAIN: z.string().optional(),
-  FRONTEND_DIST_DIR: z.string().optional()
+  FRONTEND_DIST_DIR: z.string().optional(),
+  VERCEL: z.string().optional(),
+  VERCEL_URL: z.string().optional(),
+  SYNC_GENERATION: z.coerce.boolean().default(false),
+  PERSIST_EXPORTS_TO_DISK: z.coerce.boolean().default(false)
 });
 
 export const env = envSchema.parse(process.env);

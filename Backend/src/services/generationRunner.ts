@@ -73,6 +73,12 @@ export async function queueGeneration(input: {
     }
   });
 
+  if (env.VERCEL || env.SYNC_GENERATION) {
+    await runDuplicateCheck(job.id);
+    await limiter.run(() => runGeneration(job.id));
+    return prisma.generationJob.findUniqueOrThrow({ where: { id: job.id } });
+  }
+
   void runDuplicateCheck(job.id).catch((error) => {
     const message = error instanceof Error ? error.message : "Duplicate check failed.";
     void addDeveloperEvent("error", "Duplicate check crashed", message, job.id);
@@ -155,8 +161,9 @@ async function runGeneration(jobID: string) {
       contactLine: contactLine(job.profile),
       resumeText: finalResumeText,
       style: profileResumeStyle(job.profile),
-      outputDirectory: path.join(process.cwd(), "data", "exports")
+      outputDirectory: env.PERSIST_EXPORTS_TO_DISK ? path.join(process.cwd(), "data", "exports") : undefined
     });
+    const generatedDocxBase64 = output.buffer.toString("base64");
     const totalDurationSeconds = (Date.now() - startedAt) / 1000;
 
     await prisma.generationJob.updateMany({
@@ -168,6 +175,7 @@ async function runGeneration(jobID: string) {
         resultContent: finalResumeText,
         exportedFileName: output.fileName,
         savedFilePath: output.filePath,
+        generatedDocxBase64,
         notesJSON: stringifyJSON(generated.patch.notes),
         atsAnalysisJSON: stringifyJSON(atsAnalysis),
         readinessJSON: stringifyJSON(readiness),
@@ -184,6 +192,7 @@ async function runGeneration(jobID: string) {
         generatedResume: finalResumeText,
         exportedFileName: output.fileName,
         savedFilePath: output.filePath,
+        generatedDocxBase64,
         exportFormat: job.exportFormat,
         totalDurationSeconds,
         apiDurationSeconds: generated.apiDurationSeconds,
@@ -192,7 +201,7 @@ async function runGeneration(jobID: string) {
         completedAt: new Date()
       }
     });
-    await addDeveloperEvent("export", "Resume exported", output.filePath, jobID);
+    await addDeveloperEvent("export", "Resume exported", output.filePath ?? output.fileName, jobID);
   } catch (error) {
     if (await isCancelled(jobID)) return;
     const message = error instanceof Error ? error.message : "Generation failed.";
@@ -336,6 +345,7 @@ export function serializeJob(job: {
   resultContent: string | null;
   exportedFileName: string | null;
   savedFilePath: string | null;
+  generatedDocxBase64: string | null;
   notesJSON: string;
   atsAnalysisJSON: string | null;
   readinessJSON: string | null;

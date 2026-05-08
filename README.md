@@ -4,7 +4,7 @@ Web implementation of the macOS Resume Builder workflow.
 
 ## Structure
 
-- `Backend`: Node.js, Express, TypeScript, Prisma, SQLite by default.
+- `Backend`: Node.js, Express, TypeScript, Prisma, PostgreSQL for production/serverless deploys.
 - `FrontEnd`: React, Vite, TypeScript, custom CSS matching the macOS split-view/card UX.
 - This web edition intentionally excludes Gmail and Automation. It is focused on profiles, resume generation, history/statistics, settings, and developer diagnostics.
 
@@ -28,6 +28,8 @@ Web implementation of the macOS Resume Builder workflow.
 - Downloadable generated DOCX artifacts.
 
 ## Local Development
+
+This Vercel-ready build expects PostgreSQL. For the easiest setup, create a free Neon or Vercel Postgres database and put its pooled connection string in `Backend/.env`.
 
 Install everything once:
 
@@ -82,6 +84,73 @@ Use `npm run dev` from the `Web` directory instead of running two terminals manu
 - Frontend: `http://localhost:5173`
 
 Stop both with `Ctrl+C` in the supervisor terminal.
+
+## Vercel Free Deployment
+
+This app is deployable on Vercel Hobby/free when paired with a hosted PostgreSQL database such as Neon, Supabase Postgres, or Vercel Postgres. Do not use SQLite on Vercel: Vercel functions have ephemeral local storage, so local database files and generated DOCX files are not durable.
+
+### 1. Create A Hosted Postgres Database
+
+Recommended free options:
+
+- Neon Postgres free tier.
+- Vercel Postgres / marketplace Postgres integration.
+- Supabase Postgres free tier.
+
+Copy the pooled PostgreSQL connection string. It should look similar to:
+
+```text
+postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require
+```
+
+### 2. Import The GitHub Repo Into Vercel
+
+In Vercel:
+
+- Choose this repository.
+- Keep the project root as the repository root.
+- Vercel will use `vercel.json`.
+- Build command is `npm run vercel:build`.
+- Output directory is `FrontEnd/dist`.
+- API traffic is served by `api/index.js`, which wraps the Express backend as a Vercel Function.
+
+### 3. Add Vercel Environment Variables
+
+Set these in Vercel Project Settings / Environment Variables:
+
+```env
+NODE_ENV=production
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require
+WEB_ORIGIN=https://your-vercel-app.vercel.app
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5.4
+OPENAI_REASONING_EFFORT=high
+DEFAULT_ADMIN_EMAIL=admin@your-domain.com
+DEFAULT_ADMIN_PASSWORD=replace-with-a-long-temporary-password
+SESSION_TTL_DAYS=7
+SYNC_GENERATION=true
+PERSIST_EXPORTS_TO_DISK=false
+```
+
+Leave `SESSION_COOKIE_DOMAIN` empty for the default `*.vercel.app` domain. If you later add a custom domain, you can still leave it empty unless you specifically need cross-subdomain cookies.
+
+### 4. First Deploy
+
+Deploy from Vercel. The build runs:
+
+```bash
+npm run vercel:build
+```
+
+That command pushes the Prisma schema to Postgres, builds the backend, and builds the frontend.
+
+### 5. Important Vercel Free-Tier Notes
+
+- Resume generation runs synchronously on Vercel because serverless background workers are not reliable after a response is returned.
+- The Vercel function is configured with `maxDuration: 60` in `vercel.json`.
+- Very large prompts or slow OpenAI responses can still hit Vercel free-tier function limits. If that happens, reduce model/reasoning cost or move generation to a queue worker on a paid/background-capable platform.
+- Generated DOCX files are stored in Postgres as base64 so downloads keep working after cold starts.
+- The first production startup creates the initial admin from `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD`. Change that password immediately after logging in.
 
 ## Production MacBook Deployment Without Port Forwarding
 

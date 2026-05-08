@@ -15,6 +15,7 @@ dist/
 
 # Runtime state
 .deploy/
+.vercel/
 Backend/prisma/*.db
 Backend/prisma/*.db-*
 Backend/data/*

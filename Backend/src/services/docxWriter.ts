@@ -6,12 +6,11 @@ export async function writeResumeDocx(input: {
   profileName: string;
   contactLine: string;
   resumeText: string;
-  outputDirectory: string;
+  outputDirectory?: string;
   style?: ResumeDocxStyle;
 }) {
-  await fs.mkdir(input.outputDirectory, { recursive: true });
   const fileName = `${sanitizeFileName(input.profileName) || "TailoredResume"}.docx`;
-  const filePath = path.join(input.outputDirectory, fileName);
+  const filePath = input.outputDirectory ? path.join(input.outputDirectory, fileName) : "";
   const style = normalizeStyle(input.style);
   const doc = new Document({
     background: {
@@ -42,8 +41,12 @@ export async function writeResumeDocx(input: {
     ]
   });
 
-  await fs.writeFile(filePath, await Packer.toBuffer(doc));
-  return { fileName, filePath };
+  const buffer = await Packer.toBuffer(doc);
+  if (input.outputDirectory) {
+    await fs.mkdir(input.outputDirectory, { recursive: true });
+    await fs.writeFile(filePath, buffer);
+  }
+  return { fileName, filePath: filePath || null, buffer };
 }
 
 export interface ResumeDocxStyle {

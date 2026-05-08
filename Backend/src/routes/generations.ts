@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prisma.js";
@@ -114,6 +114,12 @@ router.get("/:id/download", asyncHandler(async (req, res) => {
   const job = await prisma.generationJob.findUnique({ where: { id: String(req.params.id) } });
   if (job) {
     await assertUserCanAccessProfile(req.user!, job.profileID);
+  }
+  if (job?.generatedDocxBase64) {
+    const buffer = Buffer.from(job.generatedDocxBase64, "base64");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${job.exportedFileName ?? "TailoredResume.docx"}"`);
+    return res.send(buffer);
   }
   if (!job?.savedFilePath || !fs.existsSync(job.savedFilePath)) {
     throw notFound("Generated file not found.");

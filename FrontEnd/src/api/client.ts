@@ -1,7 +1,7 @@
 import type { APIDebugSession, AppSettings, DeveloperEvent, DuplicateCheck, GenerationJob, HistoryPage, Profile, StatisticsSummary, User, UserRole } from "../types/domain";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? "/api";
-const requestTimeoutMS = 45_000;
+const requestTimeoutMS = 180_000;
 
 export class APIError extends Error {
   constructor(
